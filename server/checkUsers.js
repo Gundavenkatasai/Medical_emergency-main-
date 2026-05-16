@@ -1,13 +1,14 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import User from './models/User.js';
+import connectDB from './config/db.js';
 
 dotenv.config();
 
 const checkUsers = async () => {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI);
+    await connectDB();
     console.log('✅ MongoDB Connected');
     console.log('📊 Database:', mongoose.connection.db.databaseName);
 

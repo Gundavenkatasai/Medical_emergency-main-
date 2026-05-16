@@ -1,16 +1,38 @@
 import User from '../models/User.js';
 import { generateToken } from '../middleware/auth.js';
+import connectDB from '../config/db.js';
 
 // @desc    Register a new user
 // @route   POST /api/auth/signup
 // @access  Public
 export const signup = async (req, res) => {
   try {
+    // Ensure database connection
+    await connectDB();
+
+    console.log('📝 Signup request received:', { 
+      name: req.body.name, 
+      email: req.body.email,
+      hasPassword: !!req.body.password,
+      hasPhone: !!req.body.phone,
+      hasAddress: !!req.body.address
+    });
+
     const { name, email, password, phone, address } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      console.error('❌ Missing required fields');
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, and password are required'
+      });
+    }
 
     // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
+      console.log('⚠️  User already exists:', email);
       return res.status(400).json({
         success: false,
         message: 'User with this email already exists'
@@ -18,6 +40,7 @@ export const signup = async (req, res) => {
     }
 
     // Create user
+    console.log('➕ Creating new user...');
     const user = await User.create({
       name,
       email,
@@ -27,6 +50,7 @@ export const signup = async (req, res) => {
     });
 
     if (user) {
+      console.log('✅ User created successfully:', user._id);
       res.status(201).json({
         success: true,
         message: 'User registered successfully',
@@ -41,11 +65,36 @@ export const signup = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('❌ Signup error details:', {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      stack: error.stack
+    });
+    
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: messages
+      });
+    }
+    
+    // Handle duplicate key error (MongoDB unique constraint)
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server error during registration',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
@@ -55,6 +104,9 @@ export const signup = async (req, res) => {
 // @access  Public
 export const login = async (req, res) => {
   try {
+    // Ensure database connection
+    await connectDB();
+
     const { email, password } = req.body;
 
     // Check for user
