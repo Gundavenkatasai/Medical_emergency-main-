@@ -8,6 +8,7 @@ console.log('🔑 JWT Secret exists:', !!process.env.JWT_SECRET);
 
 import express from 'express';
 console.log('✓ Express imported');
+import mongoose from 'mongoose';
 import cors from 'cors';
 console.log('✓ CORS imported');
 import connectDB from './config/db.js';
@@ -139,11 +140,25 @@ try {
 }
 
 // Health check route
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  const dbStatus = mongoose.connection.readyState;
+  const statusMap = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+
   res.status(200).json({
     success: true,
     message: 'Health Hub API is running',
-    timestamp: new Date().toISOString()
+    database: statusMap[dbStatus] || 'unknown',
+    timestamp: new Date().toISOString(),
+    env: {
+      hasMongoUri: !!process.env.MONGODB_URI,
+      hasJwtSecret: !!process.env.JWT_SECRET,
+      nodeEnv: process.env.NODE_ENV
+    }
   });
 });
 
