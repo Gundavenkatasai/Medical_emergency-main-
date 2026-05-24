@@ -13,7 +13,7 @@ const HealthAssistant = () => {
     {
       id: 1,
       type: "bot",
-      text: "Hello! I'm your AI Medical Assistant powered by OpenRouter. I can help with:\n• Medicine information and side effects\n• Symptom analysis\n• Pill identification (upload image)\n• Health advice\n\nAsk me anything medical!",
+      text: "Hello! I'm your AI Medical Assistant powered by Groq. I can help with:\n• Medicine information and side effects\n• Symptom analysis\n• Pill identification (upload image)\n• Health advice\n\nAsk me anything medical!",
       timestamp: new Date()
     }
   ]);
@@ -207,7 +207,7 @@ const HealthAssistant = () => {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
             <Sparkles className="w-4 h-4" />
-            Powered by OpenRouter AI
+            Powered by Groq AI
           </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-2 gradient-text">
             AI Medical Assistant
@@ -247,7 +247,7 @@ const HealthAssistant = () => {
               </div>
               <Badge variant="outline" className="gap-1">
                 <Sparkles className="w-3 h-3" />
-                GPT-4
+                Llama 3.3
               </Badge>
             </CardTitle>
           </CardHeader>

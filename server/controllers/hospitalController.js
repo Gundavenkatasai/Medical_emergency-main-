@@ -1,11 +1,12 @@
 import Hospital from '../models/Hospital.js';
+import { getNearbyHospitals as getOSMHospitals } from '../services/overpassService.js';
 
 // @desc    Get nearby hospitals within radius
 // @route   GET /api/hospitals/nearby
 // @access  Public
 export const getNearbyHospitals = async (req, res) => {
   try {
-    const { latitude, longitude, radius = 10, specialty, useGooglePlaces } = req.query;
+    const { latitude, longitude, radius = 10, specialty } = req.query;
 
     if (!latitude || !longitude) {
       return res.status(400).json({
@@ -45,28 +46,62 @@ export const getNearbyHospitals = async (req, res) => {
       filter.specialties = { $regex: new RegExp(specialty, 'i') };
     }
 
-    let hospitals;
+    let hospitals = [];
 
-    // Find hospitals within radius using geospatial query from database
-    const dbHospitals = await Hospital.find(filter);
+    // Primary source: OpenStreetMap via Overpass API
+    try {
+      const osmHospitals = await getOSMHospitals(lat, lng, radiusInKm * 1000);
+      hospitals = osmHospitals.map((hospital) => ({
+        _id: hospital.place_id,
+        place_id: hospital.place_id,
+        name: hospital.name,
+        address: hospital.address,
+        phone: hospital.phone || 'N/A',
+        rating: hospital.rating || 0,
+        reviews: 0,
+        isOpen24x7: true,
+        emergencyAvailable: hospital.emergency === true,
+        location: {
+          type: 'Point',
+          coordinates: [hospital.lng, hospital.lat]
+        },
+        distance: parseFloat(hospital.distance),
+        source: 'openstreetmap'
+      }));
 
-    // Calculate distance for each hospital
-    hospitals = dbHospitals.map(hospital => {
-      const distance = calculateDistance(
-        lat,
-        lng,
-        hospital.location.coordinates[1],
-        hospital.location.coordinates[0]
-      );
+      // Keep specialty behavior by lightweight text matching on OSM fields.
+      if (specialty && specialty !== 'all') {
+        const specialtyRegex = new RegExp(specialty, 'i');
+        hospitals = hospitals.filter((hospital) => {
+          const haystack = `${hospital.name} ${hospital.address}`;
+          return specialtyRegex.test(haystack);
+        });
+      }
+    } catch (osmError) {
+      console.error('OSM hospitals lookup failed, falling back to DB:', osmError.message);
+    }
 
-      return {
-        ...hospital.toObject(),
-        distance: parseFloat(distance.toFixed(2)),
-        source: 'database'
-      };
-    });
+    // Fallback to database if OSM yields nothing
+    if (hospitals.length === 0) {
+      const dbHospitals = await Hospital.find(filter);
 
-    // Sort by distance
+      hospitals = dbHospitals.map(hospital => {
+        const distance = calculateDistance(
+          lat,
+          lng,
+          hospital.location.coordinates[1],
+          hospital.location.coordinates[0]
+        );
+
+        return {
+          ...hospital.toObject(),
+          place_id: hospital._id.toString(),
+          distance: parseFloat(distance.toFixed(2)),
+          source: 'database'
+        };
+      });
+    }
+
     hospitals.sort((a, b) => a.distance - b.distance);
 
     res.status(200).json({

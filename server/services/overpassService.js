@@ -5,7 +5,59 @@
 
 import axios from 'axios';
 
-const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_API_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.nchc.org.tw/api/interpreter'
+];
+
+const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
+
+const OVERPASS_HEADERS = {
+  'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+  'Accept': 'application/json',
+  'User-Agent': 'MedicalEmergencyApp/1.0 (+https://github.com/Gundavenkatasai/Medical_emergency-main-)'
+};
+
+async function postOverpassQuery(query) {
+  let lastError = null;
+
+  for (const endpoint of OVERPASS_API_URLS) {
+    try {
+      const response = await axios.post(endpoint, query, {
+        headers: OVERPASS_HEADERS,
+        timeout: 30000,
+        responseType: 'json'
+      });
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      console.warn(`⚠️ Overpass endpoint failed (${endpoint}): ${status || error.message}`);
+
+      // Try the next public endpoint on common gateway/rate-limit errors.
+      if (![406, 429, 500, 502, 503, 504].includes(status)) {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error('All Overpass endpoints failed');
+}
+
+function buildBoundingBox(lat, lng, radiusMeters) {
+  const radiusKm = radiusMeters / 1000;
+  const latDelta = radiusKm / 111;
+  const lngDelta = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
+
+  return {
+    west: lng - lngDelta,
+    east: lng + lngDelta,
+    north: lat + latDelta,
+    south: lat - latDelta
+  };
+}
 
 /**
  * Fetch nearby hospitals using Overpass API
@@ -36,10 +88,7 @@ async function getNearbyHospitals(lat, lng, radius = 5000) {
       out body center tags qt;
     `;
 
-    const response = await axios.post(OVERPASS_API_URL, query, {
-      headers: { 'Content-Type': 'text/plain' },
-      timeout: 27000 // 27 seconds client timeout to match server timeout
-    });
+    const response = await postOverpassQuery(query);
 
     console.log(`📥 Overpass API Response: ${response.data.elements?.length || 0} elements found`);
 
@@ -127,10 +176,7 @@ async function getNearbyPharmacies(lat, lng, radius = 5000) {
       out body center tags qt;
     `;
 
-    const response = await axios.post(OVERPASS_API_URL, query, {
-      headers: { 'Content-Type': 'text/plain' },
-      timeout: 27000 // 27 seconds client timeout to match server timeout
-    });
+    const response = await postOverpassQuery(query);
 
     console.log(`📥 Overpass API Response: ${response.data.elements?.length || 0} pharmacy elements found`);
 
@@ -188,8 +234,54 @@ async function getNearbyPharmacies(lat, lng, radius = 5000) {
       if (sortedPharmacies.length > 1) {
         console.log(`   Farthest: ${sortedPharmacies[sortedPharmacies.length-1].name} (${sortedPharmacies[sortedPharmacies.length-1].distance}km)`);
       }
+      return sortedPharmacies;
     }
-    return sortedPharmacies;
+
+    // Secondary OSM-native fallback: Nominatim POI search inside the bounding box.
+    const bbox = buildBoundingBox(lat, lng, radius);
+    console.log('🔎 Overpass returned no pharmacies, trying Nominatim OSM search fallback');
+
+    const nominatimResponse = await axios.get(NOMINATIM_SEARCH_URL, {
+      params: {
+        format: 'jsonv2',
+        q: 'pharmacy',
+        bounded: 1,
+        viewbox: `${bbox.west},${bbox.north},${bbox.east},${bbox.south}`,
+        limit: 20,
+        addressdetails: 1,
+        'accept-language': 'en'
+      },
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': OVERPASS_HEADERS['User-Agent']
+      },
+      timeout: 30000
+    });
+
+    const nominatimPharmacies = (nominatimResponse.data || [])
+      .map((place, index) => ({
+        id: place.place_id || `nominatim_${index}`,
+        place_id: `osm_nominatim_${place.place_id || index}`,
+        name: place.display_name?.split(',')[0] || place.name || 'Pharmacy',
+        lat: parseFloat(place.lat),
+        lng: parseFloat(place.lon),
+        address: place.display_name || formatAddress(place.address || {}),
+        phone: null,
+        website: null,
+        dispensing: true,
+        wheelchair: null,
+        opening_hours: null,
+        operator: null,
+        distance: calculateDistance(lat, lng, parseFloat(place.lat), parseFloat(place.lon)).toFixed(2),
+        isOpen: true,
+        rating: null,
+        type: 'pharmacy',
+        source: 'openstreetmap'
+      }))
+      .sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+
+    console.log(`✅ Nominatim pharmacy fallback returned ${nominatimPharmacies.length} places`);
+    return nominatimPharmacies;
   } catch (error) {
     console.error('Error fetching pharmacies from Overpass:', error.message);
     throw error;

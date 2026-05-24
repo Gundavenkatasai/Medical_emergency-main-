@@ -1,14 +1,14 @@
 import fetch from 'node-fetch';
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const getGroqApiKey = () => {
+  const raw = process.env.GROQ_API_KEY || '';
+  // Handle accidental quotes/whitespace in .env values
+  return raw.trim().replace(/^['\"]|['\"]$/g, '');
+};
+
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// Log API key status (first/last 4 chars only for security)
-if (GROQ_API_KEY) {
-  console.log('✅ GroqCloud API Key configured:', GROQ_API_KEY.substring(0, 7) + '...' + GROQ_API_KEY.substring(GROQ_API_KEY.length - 4));
-} else {
-  console.error('❌ GroqCloud API Key not configured!');
-}
+// Do not validate API key at module load time; dotenv may not be initialized yet.
 
 // System prompt for medical assistant - Plain text output like Dolo-650 example
 const SYSTEM_PROMPT = `You are a medical information assistant. Provide clear, well-structured medicine information in PLAIN TEXT format.
@@ -93,6 +93,11 @@ export const queryMedicalAssistant = async (userQuery, conversationHistory = [])
   try {
     console.log('\n🤖 AI Assistant Query:', userQuery);
 
+    const apiKey = getGroqApiKey();
+    if (!apiKey) {
+      throw new Error('Missing Groq API key. Please set GROQ_API_KEY in server/.env and restart the backend.');
+    }
+
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...conversationHistory,
@@ -103,7 +108,7 @@ export const queryMedicalAssistant = async (userQuery, conversationHistory = [])
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile', // Groq's fast model
@@ -177,6 +182,11 @@ export const identifyPillFromImage = async (imageBase64, userQuery = 'Identify t
     console.log('\n💊 Pill Identification Request');
     console.log('Image size:', Math.round(imageBase64.length / 1024), 'KB');
 
+    const apiKey = getGroqApiKey();
+    if (!apiKey) {
+      throw new Error('Missing Groq API key. Please set GROQ_API_KEY in server/.env and restart the backend.');
+    }
+
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
       { 
@@ -223,7 +233,7 @@ If you cannot identify the pill clearly, say: "I cannot identify this pill with 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: 'meta-llama/llama-4-scout-17b-16e-instruct', // New Groq vision model (Dec 2024+)

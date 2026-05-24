@@ -22,8 +22,6 @@ const EmergencyRouting = () => {
   const [loading, setLoading] = useState(false);
   const [locationText, setLocationText] = useState("");
   const [viewMode, setViewMode] = useState("list");
-  const [mapboxToken, setMapboxToken] = useState(localStorage.getItem('mapbox_token') || "");
-  const [tempToken, setTempToken] = useState("");
   const [navigationTarget, setNavigationTarget] = useState(null);
   const [showNavigation, setShowNavigation] = useState(false);
   const [specialtyFilter, setSpecialtyFilter] = useState("");
@@ -166,46 +164,14 @@ const EmergencyRouting = () => {
     window.location.href = "tel:102";
   };
 
-  const saveMapboxToken = () => {
-    if (tempToken.trim()) {
-      localStorage.setItem('mapbox_token', tempToken.trim());
-      setMapboxToken(tempToken.trim());
-      toast({ title: "Token Saved", description: "Mapbox token saved successfully" });
-    }
-  };
-
   return (
     <div className="min-h-screen py-8">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold mb-2">Find Nearest Hospital</h1>
-            <p className="text-muted-foreground">Emergency hospitals within {MAX_DISTANCE_KM}km of your location</p>
+            <p className="text-muted-foreground">Emergency hospitals within {MAX_DISTANCE_KM}km of your location using OpenStreetMap</p>
           </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="icon">
-                <Settings className="w-4 h-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Map Settings</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-4">
-                <p className="text-sm text-muted-foreground">
-                  Enter your Mapbox public token to enable the interactive map. 
-                  Get your token from <a href="https://mapbox.com" target="_blank" className="text-primary underline">mapbox.com</a>
-                </p>
-                <Input 
-                  placeholder="pk.eyJ1I..." 
-                  value={tempToken || mapboxToken}
-                  onChange={(e) => setTempToken(e.target.value)}
-                />
-                <Button onClick={saveMapboxToken} className="w-full">Save Token</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
 
         <Card className="mb-6 border-destructive/30 bg-destructive/5">
@@ -325,20 +291,14 @@ const EmergencyRouting = () => {
             <TabsContent value="map">
               <Card className="overflow-hidden">
                 <div className="h-[500px]">
-                  <LocationMap 
+                  <LeafletMap 
                     userLocation={userLocation}
                     locations={nearbyHospitals}
                     type="hospital"
-                    mapboxToken={mapboxToken}
                     onMarkerClick={(hospital) => navigateToHospital(hospital)}
                   />
                 </div>
               </Card>
-              {!mapboxToken && (
-                <p className="text-center text-sm text-muted-foreground mt-4">
-                  Click the ⚙️ icon to add your Mapbox token and enable the interactive map
-                </p>
-              )}
             </TabsContent>
           </Tabs>
         )}

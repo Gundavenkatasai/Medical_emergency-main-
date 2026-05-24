@@ -1,11 +1,12 @@
 import Pharmacy from '../models/Pharmacy.js';
+import { getNearbyPharmacies as getOSMPharmacies } from '../services/overpassService.js';
 
 // @desc    Get nearby pharmacies within radius
 // @route   GET /api/pharmacies/nearby
 // @access  Public
 export const getNearbyPharmacies = async (req, res) => {
   try {
-    const { latitude, longitude, radius = 10, open24x7, useGooglePlaces } = req.query;
+    const { latitude, longitude, radius = 10, open24x7 } = req.query;
 
     if (!latitude || !longitude) {
       return res.status(400).json({
@@ -45,29 +46,57 @@ export const getNearbyPharmacies = async (req, res) => {
       filter.isOpen24x7 = true;
     }
 
-    let pharmacies;
+    let pharmacies = [];
 
-    // Find pharmacies within radius using geospatial query from database
-    const dbPharmacies = await Pharmacy.find(filter);
+    // Primary source: OpenStreetMap via Overpass API
+    try {
+      const osmPharmacies = await getOSMPharmacies(lat, lng, radiusInKm * 1000);
+      pharmacies = osmPharmacies.map((pharmacy) => ({
+        _id: pharmacy.place_id,
+        place_id: pharmacy.place_id,
+        name: pharmacy.name,
+        address: pharmacy.address,
+        phone: pharmacy.phone || 'N/A',
+        rating: pharmacy.rating || 0,
+        reviews: 0,
+        isOpen: pharmacy.isOpen !== false,
+        isOpen24x7: pharmacy.opening_hours === '24/7',
+        location: {
+          type: 'Point',
+          coordinates: [pharmacy.lng, pharmacy.lat]
+        },
+        distance: parseFloat(pharmacy.distance),
+        source: 'openstreetmap'
+      }));
 
-    // Calculate distance for each pharmacy
-    pharmacies = dbPharmacies.map(pharmacy => {
-      const distance = calculateDistance(
-        lat,
-        lng,
-        pharmacy.location.coordinates[1],
-        pharmacy.location.coordinates[0]
-      );
+      if (open24x7 === 'true') {
+        pharmacies = pharmacies.filter((pharmacy) => pharmacy.isOpen24x7);
+      }
+    } catch (osmError) {
+      console.error('OSM pharmacies lookup failed, falling back to DB:', osmError.message);
+    }
 
-      return {
-        ...pharmacy.toObject(),
-        distance: parseFloat(distance.toFixed(2)),
-        address: `${distance.toFixed(1)} km from your location`,
-        source: 'database'
-      };
-    });
+    // Fallback to database if OSM yields nothing
+    if (pharmacies.length === 0) {
+      const dbPharmacies = await Pharmacy.find(filter);
 
-    // Sort by distance
+      pharmacies = dbPharmacies.map(pharmacy => {
+        const distance = calculateDistance(
+          lat,
+          lng,
+          pharmacy.location.coordinates[1],
+          pharmacy.location.coordinates[0]
+        );
+
+        return {
+          ...pharmacy.toObject(),
+          place_id: pharmacy._id.toString(),
+          distance: parseFloat(distance.toFixed(2)),
+          source: 'database'
+        };
+      });
+    }
+
     pharmacies.sort((a, b) => a.distance - b.distance);
 
     res.status(200).json({

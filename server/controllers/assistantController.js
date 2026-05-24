@@ -22,24 +22,12 @@ export const chatWithAssistant = async (req, res) => {
 
     console.log(`\n💬 Chat Request: "${query.substring(0, 100)}..."`);
 
-    // Quick check if query is medical-related
+    // Keep scope check only as logging signal; allow model to decide final scope.
     if (!isMedicalQuery(query)) {
-      console.log('⚠️ Non-medical query detected');
-      return res.status(200).json({
-        success: true,
-        data: {
-          query,
-          intent: 'out_of_scope',
-          result: {},
-          evidence: [],
-          confidence_score: 0,
-          summary: "I don't know"
-        },
-        source: 'scope_filter'
-      });
+      console.log('⚠️ Query may be non-medical; forwarding to model for final scope decision');
     }
 
-    // Query OpenRouter AI
+    // Query Groq AI
     const result = await queryMedicalAssistant(query, conversationHistory);
 
     if (result.success) {
@@ -53,7 +41,7 @@ export const chatWithAssistant = async (req, res) => {
         success: true,
         data: result.data,
         usage: result.usage,
-        source: 'openrouter'
+        source: 'groq'
       });
     } else {
       return res.status(500).json({
@@ -120,7 +108,7 @@ export const identifyPill = async (req, res) => {
         success: true,
         data: result.data,
         usage: result.usage,
-        source: 'openrouter_vision'
+        source: 'groq_vision'
       });
     } else {
       return res.status(500).json({
@@ -174,7 +162,7 @@ export const getMedicineInfo = async (req, res) => {
         success: true,
         data: result.data,
         usage: result.usage,
-        source: 'openrouter'
+        source: 'groq'
       });
     } else {
       return res.status(500).json({
