@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.jsx";
 import { Switch } from "@/components/ui/switch.jsx";
 import { Label } from "@/components/ui/label.jsx";
-import LocationMap from "@/components/maps/LocationMap.jsx";
+import LeafletMap from "@/components/maps/LeafletMap.jsx";
 import NavigationDialog from "@/components/maps/NavigationDialog.jsx";
 import { hospitalAPI } from "@/lib/api.js";
 
@@ -295,7 +295,6 @@ const EmergencyRouting = () => {
                     userLocation={userLocation}
                     locations={nearbyHospitals}
                     type="hospital"
-                    onMarkerClick={(hospital) => navigateToHospital(hospital)}
                   />
                 </div>
               </Card>
