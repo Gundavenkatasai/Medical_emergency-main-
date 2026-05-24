@@ -2,18 +2,17 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
-import basicSsl from '@vitejs/plugin-basic-ssl';
+// Removed @vitejs/plugin-basic-ssl due to peer dependency conflicts with Vite v5
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    https: true,
+    https: false,
   },
   plugins: [
-    react(), 
-    basicSsl(),
+    react(),
     mode === "development" && componentTagger()
   ].filter(Boolean),
   resolve: {
